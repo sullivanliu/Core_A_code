@@ -1,0 +1,490 @@
+diff --git a/arch/arm/boot/dts/sc589-mini.dts b/arch/arm/boot/dts/sc589-mini.dts
+index 35c0730..fd42093 100644
+--- a/arch/arm/boot/dts/sc589-mini.dts
++++ b/arch/arm/boot/dts/sc589-mini.dts
+@@ -36,6 +36,26 @@
+ 			button_gpio = <81>;
+ 			led_gpio = <50>;
+ 		};
++
++		core1-rproc@0x3108b000 {
++			compatible = "adi,remoteproc";
++			reg = <0x3108b000 0x70>;
++			core-id = <1>;
++			firmware-name = "adi_sharc_core1_fw";
++		};
++
++		core2-rproc@0x3108b000 {
++			compatible = "adi,remoteproc";
++			reg = <0x3108b000 0x70>;
++			core-id = <2>;
++			firmware-name = "adi_sharc_core2_fw";
++		};
++
++		sound {
++			compatible = "sam,eval-adau1x61";
++			adi,cpu-dai = <&i2s0>;
++			adi,codec = <&adau1761>;
++		};
+ 	};
+ };
+ 
+@@ -89,6 +109,12 @@
+ 
+ &i2c0 {
+ 	status = "okay";
++	adau1761:adau1761@0x38{
++		compatible = "adi,adau1761";
++		reg = <0x38>;
++		twi-select-gpio = <&gpb 8 0>, 	/* Low: ADAU1761 TWI0 Connected */
++				<&gpb 6 0>;
++	};
+ };
+ 
+ &i2c1 {
+@@ -99,6 +125,13 @@
+ 	status = "okay";
+ };
+ 
++&i2s0 {
++	reg = <0x31002000 0x80>, <0x31002080 0x80>;
++	interrupts = <0 53 0>, <0 55 0>;
++	dma-channel = <0>, <1>;
++	status = "okay";
++};
++
+ &emac0 {
+ 	snps,reset-gpio = <&gpb 7 0>;
+ 	snps,reset-active-low;
+diff --git a/arch/arm/boot/dts/sc58x.dtsi b/arch/arm/boot/dts/sc58x.dtsi
+index 9ef56d7..4e0cedc 100644
+--- a/arch/arm/boot/dts/sc58x.dtsi
++++ b/arch/arm/boot/dts/sc58x.dtsi
+@@ -227,9 +227,6 @@
+ 
+ 		i2s0: i2s@0 {
+ 			compatible = "sc5xx,i2s-dai";
+-			reg = <0x31002400 0x80>, <0x31002480 0x80>;
+-			interrupts = <0 61 0>, <0 63 0>;
+-			dma-channel = <10>, <11>;
+ 			status = "disabled";
+ 		};
+ 
+diff --git a/arch/arm/mach-sc58x/sc58x-ezkit.c b/arch/arm/mach-sc58x/sc58x-ezkit.c
+index dd2a5d5..7e83578 100644
+--- a/arch/arm/mach-sc58x/sc58x-ezkit.c
++++ b/arch/arm/mach-sc58x/sc58x-ezkit.c
+@@ -22,6 +22,122 @@
+ 
+ #include "core.h"
+ #if IS_ENABLED(CONFIG_SND_SC5XX_SPORT)
++#if IS_ENABLED(CONFIG_MACH_SC589_MINI)
++void sru_init(void)
++{
++#if 1
++	SRU(0, HIGH, DAI0_PBEN05_I);
++	SRU(0, LOW, DAI0_PB05_I);
++	SRU(0, LOW, DAI0_PBEN06_I);
++    // Enable this code to route the I2S signals to DAI pins on the expansion header for debugging
++    #if 1
++    // And set unused DAI0 pins as outputs for debug
++    SRU(0, HIGH,  DAI0_PBEN13_I);            // ADAU1761 DAC data (debug) is an output
++    SRU(0, HIGH,  DAI0_PBEN14_I);            // ADAU1761 ADC data (debug) is an output
++    SRU(0, HIGH,  DAI0_PBEN15_I);            // ADAU1761 CLK (debug) is an output
++    SRU(0, HIGH,  DAI0_PBEN16_I);            // ADAU1761 FS (debug) is an output
++
++    // Route ADAU1761 signals to higher DAI pins on expansion header for debug purposes
++    SRU(0, DAI0_PB01_O, DAI0_PB13_I);
++    SRU(0, DAI0_PB02_O, DAI0_PB14_I);
++    SRU(0, DAI0_PB03_O, DAI0_PB15_I);
++    SRU(0, DAI0_PB04_O, DAI0_PB16_I);
++    #endif
++
++	/* Set up pins for AD2425W(A2B) */
++	/* set DAI0_PIN07 for A2B BCLK as an output(to A2B bus) */
++	SRU(0, HIGH, DAI0_PBEN07_I);
++	/* set DAI0_PIN08 for A2B FS as an output(to A2B bus) */
++	SRU(0, HIGH, DAI0_PBEN08_I);
++	/* set DAI0_PIN09 for DTX0 as an input(from A2B bus) */
++	SRU(0, LOW, DAI0_PBEN09_I);
++	/* set DAI0_PIN10 for DTX1 as an input(from A2B bus) */
++	SRU(0, LOW, DAI0_PBEN10_I);
++	/* set DAI0_PIN11 for DRX0 as an output(to A2B bus) */
++	SRU(0, HIGH, DAI0_PBEN11_I);
++	/* set DAI0_PIN12 for DRX1 as an output(to A2B bus) */
++	SRU(0, HIGH, DAI0_PBEN12_I);
++#endif
++	/* Set up pins for ADAU1761 */
++	/* set DAI0_PIN01 for ADAU1761 DAC data as an output */
++	SRU(0, HIGH, DAI0_PBEN01_I);
++	/* set DAI0_PIN02 for ADAU1761 ADC data as an input */
++	SRU(0, LOW, DAI0_PBEN02_I);
++	/* set DAI0_PIN03 for ADAU1761 CLK as an input */
++	SRU(0, LOW, DAI0_PBEN03_I);
++	/* set DAI0_PIN04 for ADAU1761 FS as an input */
++	SRU(0, LOW, DAI0_PBEN04_I);
++#if 1
++	/* Connect A2B signals to SPORT1 */
++	/* route A2B BCLK to SPORT1A clock input */
++	SRU(0, DAI0_PB07_O, SPT1_ACLK_I);
++	/* route A2B BCLK to SPORT1B clock input */
++	SRU(0, DAI0_PB07_O, SPT1_BCLK_I);
++	/* route A2B FS to SPORT1A FS input */
++	SRU(0, DAI0_PB08_O, SPT1_AFS_I);
++	/* route A2B FS to SPORT1B FS input */
++	SRU(0, DAI0_PB08_O, SPT1_BFS_I);
++	/* route A2B DTX0 to SPORT1B data RX primary */
++	SRU(0, DAI0_PB09_O, SPT1_BD0_I);
++	/* route A2B DTX1 to SPORT1B data RX secondary */
++	SRU(0, DAI0_PB10_O, SPT1_BD1_I);
++	/* route SPORT1A data TX primary to A2B DRX0 */
++	SRU(0, SPT1_AD0_O, DAI0_PB11_I);
++	/* route SPORT1A data TX secondary to A2B DRX0 */
++	SRU(0, SPT1_AD1_O, DAI0_PB12_I);
++#endif
++	/* Connect ADAU1761 signals to SPORT0 */
++	/* route ADAU1761 ADC pin to SPT0 BD0 input */
++	SRU(0, DAI0_PB02_O, SPT0_BD0_I);
++	/* route SPT0A AD0 output to 1761 DAC pin */
++	SRU(0, SPT0_AD0_O, DAI0_PB01_I);
++	/* route ADAU1761 BCLK pin to SPORT0A clock input */
++	SRU(0, DAI0_PB03_O, SPT0_ACLK_I);
++	/* route ADAU1761 BCLK pin to SPORT0B clock input */
++	SRU(0, DAI0_PB03_O, SPT0_BCLK_I);
++	/* route ADAU1761 FS pin to SPORT0A frame sync */
++	SRU(0, DAI0_PB04_O, SPT0_AFS_I);
++	/* route ADAU1761 FS pin to SPORT0B frame sync */
++	SRU(0, DAI0_PB04_O, SPT0_BFS_I);
++#if 1
++	/* Route ADAU1761 clock and frame sync to the AD2425W(A2B) */
++	/* route ADAU1761 BCLK to A2B BCLK */
++	SRU(0, DAI0_PB03_O, DAI0_PB07_I);
++	/* route ADAU1761 FS to A2B FS */
++	SRU(0, DAI0_PB04_O, DAI0_PB08_I);
++
++	SRU(0, HIGH, DAI0_PBEN20_I);
++	SRU(0, LOW, DAI0_PBEN19_I);
++	SRU(0, DAI0_PB19_O, SPDIF0_RX_I);
++	SRU(0, SPDIF0_TX_O, DAI0_PB20_I);
++	SRU(0, DAI0_PB03_O, PCG0_EXTCLKA_I);
++	SRU(0, DAI0_PB04_O, PCG0_SYNC_CLKA_I);
++
++	writel(0x3, __io_address(0x310c9314));
++	writel(0xc0000004, __io_address(0x310c9304));
++	writel(0xc0000100, __io_address(0x310c9300));
++
++	SRU(0, PCG0_CLKA_O, SPT2_ACLK_I);
++	SRU(0, PCG0_CLKA_O, SPT2_BCLK_I);
++	SRU(0, PCG0_FSA_O, SPT2_AFS_I);
++	SRU(0, PCG0_FSA_O, SPT2_BFS_I);
++	SRU(0, SPDIF0_RX_CLK_O, SRC0_CLK_IP_I);
++	SRU(0, SPDIF0_RX_FS_O,  SRC0_FS_IP_I);
++	SRU(0, SPDIF0_RX_DAT_O, SRC0_DAT_IP_I);
++	// Connect SPORT 2 to SRC 0 "OP" side
++        SRU(0, PCG0_CLKA_O,     SRC0_CLK_OP_I);     // route PCG 64fs BCLK signal to SRC OP BCLK
++        SRU(0, PCG0_FSA_O,     SRC0_FS_OP_I);         // route PCG FS signal to SRC OP FS
++        SRU(0, SRC0_DAT_OP_O,  SPT2_BD0_I);      // route SRC0 OP Data output to SPORT 2B data
++	writel(0x8404, __io_address(0x310c9240));
++	writel(0xd, __io_address(0x310c92a0));
++	SRU(0, DAI0_PB03_O, SPDIF0_TX_HFCLK_I);
++	SRU(0, PCG0_CLKA_O, SPDIF0_TX_CLK_I);
++	SRU(0, PCG0_FSA_O, SPDIF0_TX_FS_I);
++	SRU(0, SPT2_AD0_O, SPDIF0_TX_DAT_I);
++	writel(0x241, __io_address(0x310c9280));
++#endif
++}
++#else
+ void sru_init(void)
+ {
+ 	/* set DAI1_PIN02 to input */
+@@ -52,11 +168,12 @@ void sru_init(void)
+ 	/* route DAI1_PIN06 to SPT4_BD0 */
+ 	SRU(1, DAI1_PB06_O, SPT4_BD0_I);
+ }
++#endif
+ EXPORT_SYMBOL(sru_init);
+ #endif
+ void pads_init(void)
+ {
+-	writel(0xffffffff, __io_address(REG_PADS0_DAI0_IE));
++	writel(0x001ffffe, __io_address(REG_PADS0_DAI0_IE));
+ 	writel(0xffffffff, __io_address(REG_PADS0_DAI1_IE));
+ }
+ EXPORT_SYMBOL(pads_init);
+diff --git a/include/sound/sc5xx-sru.h b/include/sound/sc5xx-sru.h
+index 39bb4f7..5f45e3c 100644
+--- a/include/sound/sc5xx-sru.h
++++ b/include/sound/sc5xx-sru.h
+@@ -382,6 +382,9 @@
+ /* -------------------------------------------- */
+ /*	Bit Field Codes */
+ /* -------------------------------------------- */
++#define _DUMMY_VALUE	0xffffffff
++#define A_DAI0_PB01_O	_DUMMY_VALUE
++#define C_DAI0_PB01_O	_DUMMY_VALUE
+ 
+ /* DAI0 */
+ 
+diff --git a/sound/soc/adi/Kconfig b/sound/soc/adi/Kconfig
+index 3fa7733..5f19836 100644
+--- a/sound/soc/adi/Kconfig
++++ b/sound/soc/adi/Kconfig
+@@ -50,6 +50,16 @@ config SND_SC5XX_ADAU1962
+ 	Say Y if you want to add support for the Analog Devices ADAU1962
+         board connected to the SC5XX ezkit board.
+ 
++config SND_SAM_ADAU1X61
++	tristate "Support for the ADAU1761 board on SHARC Audio board"
++	depends on SND_SC5XX_PCM && I2C
++	select SND_SAM_ADAU1X61_MACHINE
++	select SND_SOC_ADI_SC5XX_I2S
++	select SND_SOC_ADAU1761_I2C
++	help
++	Say Y if you want to add support for the Analog Devices ADAU1761
++        board connected to the SHARC Audio board.
++
+ config SND_SC5XX_SPORT
+ 	tristate
+ 	depends on ARCH_SC58X || ARCH_SC57X
+@@ -75,3 +85,11 @@ config SND_SC5XX_MACHINE
+ 	Describes the ASoC Machine driver for ADI SC5XX based boards
+ 	Audio devices on SC5xx requires this
+ 	Say Y or M if you want to enable this
++
++config SND_SAM_ADAU1X61_MACHINE
++	tristate
++	depends on ARCH_SC58X && MACH_SC589_MINI
++	help
++	Describes the ASoC Machine driver for ADI SAM based boards
++	Audio devices on SC5xx requires this
++	Say Y or M if you want to enable this
+diff --git a/sound/soc/adi/Makefile b/sound/soc/adi/Makefile
+index 68b1253..75619bf0 100644
+--- a/sound/soc/adi/Makefile
++++ b/sound/soc/adi/Makefile
+@@ -4,6 +4,7 @@ snd-soc-pcm-objs := sc5xx-pcm.o
+ snd-soc-adi-sc5xx-i2s-objs := sc5xx-i2s.o
+ snd-soc-sc5xx-sport-objs := sc5xx-sport.o
+ snd-soc-sc5xx-asoc-card-objs := sc5xx-asoc-card.o
++snd-soc-sam-eval-adau1x61-objs := sam-eval-adau1x61.o
+ 
+ obj-$(CONFIG_SND_SOC_ADI_AXI_I2S) += snd-soc-adi-axi-i2s.o
+ obj-$(CONFIG_SND_SOC_ADI_AXI_SPDIF) += snd-soc-adi-axi-spdif.o
+@@ -11,3 +12,4 @@ obj-$(CONFIG_SND_SC5XX_PCM) += snd-soc-pcm.o
+ obj-$(CONFIG_SND_SOC_ADI_SC5XX_I2S) += snd-soc-adi-sc5xx-i2s.o
+ obj-$(CONFIG_SND_SC5XX_SPORT) += snd-soc-sc5xx-sport.o
+ obj-$(CONFIG_SND_SC5XX_MACHINE) += snd-soc-sc5xx-asoc-card.o
++obj-$(CONFIG_SND_SAM_ADAU1X61_MACHINE) += snd-soc-sam-eval-adau1x61.o
+diff --git a/sound/soc/adi/sam-eval-adau1x61.c b/sound/soc/adi/sam-eval-adau1x61.c
+new file mode 100644
+index 0000000..1b1f80e
+--- /dev/null
++++ b/sound/soc/adi/sam-eval-adau1x61.c
+@@ -0,0 +1,207 @@
++/*
++ * Machine driver for ADI SHARC Audio Board.
++ *
++ * Copyright 2018 Analog Devices Inc.
++ * Author: Greg Chen <jian.chen@analog.com>
++ *
++ * Licensed under the GPL-2 or later.
++ */
++
++#include <linux/module.h>
++#include <linux/device.h>
++#include <linux/slab.h>
++#include <linux/of_gpio.h>
++#include <sound/core.h>
++#include <sound/pcm.h>
++#include <sound/soc.h>
++#include <sound/pcm_params.h>
++
++#include "../codecs/adau17x1.h"
++
++static const struct snd_soc_dapm_widget sam_eval_adau1x61_dapm_widgets[] = {
++	SND_SOC_DAPM_LINE("In 1", NULL),
++	SND_SOC_DAPM_LINE("In 2", NULL),
++	SND_SOC_DAPM_LINE("In 3-4", NULL),
++
++	SND_SOC_DAPM_LINE("Diff Out L", NULL),
++	SND_SOC_DAPM_LINE("Diff Out R", NULL),
++	SND_SOC_DAPM_LINE("Stereo Out", NULL),
++	SND_SOC_DAPM_HP("Capless HP Out", NULL),
++};
++
++static const struct snd_soc_dapm_route sam_eval_adau1x61_dapm_routes[] = {
++	{ "LAUX", NULL, "In 3-4" },
++	{ "RAUX", NULL, "In 3-4" },
++	{ "LINP", NULL, "In 1" },
++	{ "LINN", NULL, "In 1"},
++	{ "RINP", NULL, "In 2" },
++	{ "RINN", NULL, "In 2" },
++
++	{ "In 1", NULL, "MICBIAS" },
++	{ "In 2", NULL, "MICBIAS" },
++
++	{ "Capless HP Out", NULL, "LHP" },
++	{ "Capless HP Out", NULL, "RHP" },
++	{ "Diff Out L", NULL, "LOUT" },
++	{ "Diff Out R", NULL, "ROUT" },
++	{ "Stereo Out", NULL, "LOUT" },
++	{ "Stereo Out", NULL, "ROUT" },
++};
++
++static int sam_adau1761_hw_params(struct snd_pcm_substream *substream,
++	struct snd_pcm_hw_params *params)
++{
++	struct snd_soc_pcm_runtime *rtd = substream->private_data;
++	struct snd_soc_dai *codec_dai = rtd->codec_dai;
++	unsigned int fmt, rx_mask = 0;
++	unsigned int slot_width = 0;
++	int ret, slots = 0;
++
++	switch (params_channels(params)) {
++	case 2: /* Stereo I2S mode */
++		fmt =	SND_SOC_DAIFMT_I2S |
++			SND_SOC_DAIFMT_NB_NF |
++			SND_SOC_DAIFMT_CBM_CFM;
++		break;
++	case 1: /* TDM mode */
++		fmt =	SND_SOC_DAIFMT_DSP_A |
++			SND_SOC_DAIFMT_IB_NF |
++			SND_SOC_DAIFMT_CBM_CFM;
++		slots = 16;
++		rx_mask = 0x1;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	switch (params_width(params)) {
++	case 16:
++		slot_width = 16;
++		break;
++	case 24:
++	case 32:
++		slot_width = 32;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	ret = snd_soc_runtime_set_dai_fmt(rtd, fmt);
++	if (ret)
++		return ret;
++
++	return snd_soc_dai_set_tdm_slot(codec_dai, 0, rx_mask,
++				 slots, slot_width);
++
++}
++
++static int sam_eval_adau1x61_hw_params(struct snd_pcm_substream *substream,
++	struct snd_pcm_hw_params *params)
++{
++	struct snd_soc_pcm_runtime *rtd = substream->private_data;
++	struct snd_soc_dai *codec_dai = rtd->codec_dai;
++	int pll_rate;
++	int ret;
++
++	switch (params_rate(params)) {
++	case 48000:
++	case 8000:
++	case 12000:
++	case 16000:
++	case 24000:
++	case 32000:
++	case 96000:
++		pll_rate = 48000 * 1024;
++		break;
++	case 44100:
++	case 7350:
++	case 11025:
++	case 14700:
++	case 22050:
++	case 29400:
++	case 88200:
++		pll_rate = 44100 * 1024;
++		break;
++	default:
++		return -EINVAL;
++	}
++
++	ret = snd_soc_dai_set_pll(codec_dai, ADAU17X1_PLL,
++			ADAU17X1_PLL_SRC_MCLK, 12288000, pll_rate);
++	if (ret)
++		return ret;
++
++	ret = snd_soc_dai_set_sysclk(codec_dai, ADAU17X1_CLK_SRC_PLL, 12288000,
++			SND_SOC_CLOCK_IN);
++	if (ret) {
++		printk("%s error, ret:%d\n", __func__, ret);
++		return ret;
++	}
++
++	ret = sam_adau1761_hw_params(substream, params);
++	return ret;
++}
++
++static const struct snd_soc_ops sam_eval_adau1x61_ops = {
++	.hw_params = sam_eval_adau1x61_hw_params,
++};
++
++static struct snd_soc_dai_link sam_eval_adau1x61_dai = {
++	.name = "adau1x61",
++	.stream_name = "adau1x61",
++	.codec_dai_name = "adau-hifi",
++	.platform_name = "sc5xx-pcm-audio",
++	.ops = &sam_eval_adau1x61_ops,
++	.dai_fmt = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
++		SND_SOC_DAIFMT_CBM_CFM,
++};
++
++static struct snd_soc_card sam_eval_adau1x61 = {
++	.name = "sam-eval-adau1x61",
++	.owner = THIS_MODULE,
++	.driver_name = "eval-adau1x61",
++	.dai_link = &sam_eval_adau1x61_dai,
++	.num_links = 1,
++
++	.dapm_widgets = sam_eval_adau1x61_dapm_widgets,
++	.num_dapm_widgets = ARRAY_SIZE(sam_eval_adau1x61_dapm_widgets),
++	.dapm_routes = sam_eval_adau1x61_dapm_routes,
++	.num_dapm_routes = ARRAY_SIZE(sam_eval_adau1x61_dapm_routes),
++	.fully_routed = true,
++};
++
++static int sam_eval_adau1x61_probe(struct platform_device *pdev)
++{
++	struct device_node *node = pdev->dev.of_node;
++
++	sam_eval_adau1x61_dai.cpu_of_node =
++		of_parse_phandle(node, "adi,cpu-dai", 0);
++	sam_eval_adau1x61_dai.codec_of_node =
++			of_parse_phandle(node, "adi,codec", 0);
++	sam_eval_adau1x61.dev = &pdev->dev;
++
++	return devm_snd_soc_register_card(&pdev->dev, &sam_eval_adau1x61);
++}
++
++#ifdef CONFIG_OF
++static const struct of_device_id sam_adau1x61_of_match[] = {
++	{ .compatible = "sam,eval-adau1x61" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, sam_adau1x61_of_match);
++#endif
++
++static struct platform_driver sam_eval_adau1x61_driver = {
++	.driver = {
++		.name = "sam-eval-adau1x61",
++		.pm = &snd_soc_pm_ops,
++		.of_match_table = of_match_ptr(sam_adau1x61_of_match),
++	},
++	.probe = sam_eval_adau1x61_probe,
++};
++module_platform_driver(sam_eval_adau1x61_driver);
++
++MODULE_AUTHOR("Greg Chen <jian.chen@analog.com>");
++MODULE_DESCRIPTION("ALSA SHARC AUDIO adau1x61 machine driver");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("platform:sam-eval-adau1x61");
